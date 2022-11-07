@@ -125,7 +125,8 @@ func NewRSis(seed int64, logTwoDegree, logTwoBound, keySize int) (hash.Hash, err
 // MulMod computes p * q in ℤ_{p}[X]/Xᵈ+1.
 // Is assumed that pLagrangeShifted and qLagrangeShifted are of the corret sizes
 // and that they are in evaluation form on √(g) * <g>
-// The result is in canonical form.
+// The result is not FFTinversed. The fft inverse is done once every
+// multiplications are done.
 func (r RSis) MulMod(pLagrangeCosetBitReversed, qLagrangeCosetBitReversed []fr.Element) []fr.Element {
 
 	res := make([]fr.Element, len(pLagrangeCosetBitReversed))
@@ -133,8 +134,8 @@ func (r RSis) MulMod(pLagrangeCosetBitReversed, qLagrangeCosetBitReversed []fr.E
 		res[i].Mul(&pLagrangeCosetBitReversed[i], &qLagrangeCosetBitReversed[i])
 	}
 
-	// FFTinv on the coset, it automagically reduces mod Xᵈ+1
-	r.Domain.FFTInverse(res, fft.DIT, true)
+	// NOT fft inv for now, wait until every part of the keys have been multiplied
+	// r.Domain.FFTInverse(res, fft.DIT, true)
 
 	return res
 
@@ -210,6 +211,10 @@ func (r *RSis) Sum(b []byte) []byte {
 			res[j].Add(&res[j], &t[j])
 		}
 	}
+
+	// Now that every part of the key have been multiplied,
+	// we do the FFTinv on the coset, it automagically reduces mod Xᵈ+1
+	r.Domain.FFTInverse(res, fft.DIT, true)
 
 	sizeFrElmt := len(res[0].Bytes())
 	resBytes := make([]byte, sizeFrElmt*r.Degree)

@@ -15,6 +15,7 @@
 package sis
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/consensys/gnark-crypto/ecc/bn254/fr"
@@ -64,7 +65,9 @@ func TestRSis(t *testing.T) {
 
 func TestMulMod(t *testing.T) {
 
-	sis, err := NewRSis(5, 2, 3, 8)
+	logTwoDegree := 2
+
+	sis, err := NewRSis(5, logTwoDegree, 3, 8)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,6 +89,16 @@ func TestMulMod(t *testing.T) {
 	_sis.Domain.FFT(q, fft.DIF, true)
 	r := _sis.MulMod(p, q)
 
+	// creation of the domain
+	var shift fr.Element
+	shift.SetString("19103219067921713944291392827692070036145651957329286315305642004821462161904") // -> 2²⁸-th root of unity of bn254
+	e := int64(1 << (28 - (logTwoDegree + 1)))
+	shift.Exp(shift, big.NewInt(e))
+	domain := fft.NewDomain(uint64(1<<logTwoDegree), shift)
+
+	// fft inv
+	domain.FFTInverse(r, fft.DIT, true)
+
 	expectedr := make([]fr.Element, 4)
 	expectedr[0].SetString("21888242871839275222246405745257275088548364400416034343698204185887558114297")
 	expectedr[1].SetString("631644300118")
@@ -102,15 +115,16 @@ func TestMulMod(t *testing.T) {
 
 func BenchmarkSIS(b *testing.B) {
 
-	keySize := 64
-	logTwoBound := 6
-	logTwoDegree := 6
+	keySize := 256
+	logTwoBound := 2
+	logTwoDegree := 2
 
 	sis, _ := NewRSis(5, logTwoDegree, logTwoBound, keySize)
 
 	// 96 = (1 << logTwoDegree) * logTwoBound * keySize / 256
+	nbFrElements := ((1 << logTwoDegree) * logTwoBound * keySize) >> 8
 	var p fr.Element
-	for i := 0; i < 96; i++ {
+	for i := 0; i < nbFrElements; i++ {
 		p.SetRandom()
 		sis.Write(p.Marshal())
 	}
